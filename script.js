@@ -16,12 +16,16 @@ const configuration = {
 let room;
 let pc;
 
+let connections = []
+
 console.log(roomName)
 
 function onSuccess() {};
 function onError(error) {
   console.error(error);
 };
+
+let currID;
 
 drone.on('open', error => {
   if (error) {
@@ -33,59 +37,103 @@ drone.on('open', error => {
       onError(error);
     }
   });
+
   // We're connected to the room and received an array of 'members'
   // connected to the room (including us). Signaling server is ready.
   room.on('members', members => {
-    console.log('MEMBERS', members);
-    // If we are the second user to connect to the room we will be creating the offer
-    const isOfferer = members.length === 2;
-    startWebRTC(isOfferer);
+    currID = members.length-1;
+
+    if(!connections[currID]) {
+      connections[currID] = new RTCPeerConnection(configuration);
+    }
+
+    navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: true,
+    }).then(stream => {
+      // Display your local video in #localVideo element
+      localVideo.srcObject = stream;
+
+      let videoId = 2;
+
+      for(let i=0; i<6; i++) {
+        if(!connections[i]) {
+          console.log("Creating new for "+i);
+          connections[i] = new RTCPeerConnection(configuration);
+        
+          connections[i].onicecandidate = event => {
+            if (event.candidate) {
+              console.log("sending ice");
+              sendMessage({'candidate': event.candidate}, i);
+            }
+          };
+
+          // When a remote stream arrives display it in the #remoteVideo element
+          
+          connections[i].ontrack = event => {
+            console.log("video by:"+i);
+            const stream = event.streams[0];
+            let remoteVideoName = "remoteVideo"+Math.floor(videoId/2);
+            videoId++;
+            remoteVideo = document.getElementById(remoteVideoName)
+            if (!remoteVideo.srcObject || remoteVideo.srcObject.id !== stream.id) {
+              remoteVideo.srcObject = stream;
+            }
+          };
+        }
+       // Add your stream to be sent to the conneting peer
+        stream.getTracks().forEach(track => connections[i].addTrack(track, stream));
+      }
+  
+    if(currID===0) {
+      startWebRTC(false, currID);
+    }
+
+    for(let j=0; j<currID; j++) { //calling to all previous peers
+      startWebRTC(true, j);
+    }
+    
   });
 });
 
+  room.on('member_join', members => {
+    //could be utilized with custom signalling server
+  });
+
+});
+
 // Send signaling data via Scaledrone
-function sendMessage(message) {
+function sendMessage(message, i) {
+  let newMessage = {
+    peerId: currID,
+    destId : i,
+    msg: message
+  }
+
+  message = newMessage
+
   drone.publish({
     room: roomName,
     message
   });
 }
 
-function startWebRTC(isOfferer) {
-  pc = new RTCPeerConnection(configuration);
+function startWebRTC(isOfferer, i) {
 
-  // 'onicecandidate' notifies us whenever an ICE agent needs to deliver a
-  // message to the other peer through the signaling server
-  pc.onicecandidate = event => {
-    if (event.candidate) {
-      sendMessage({'candidate': event.candidate});
-    }
-  };
-
-  // If user is offerer let the 'negotiationneeded' event create the offer
-  if (isOfferer) {
-    pc.onnegotiationneeded = () => {
-      pc.createOffer().then(localDescCreated).catch(onError);
-    }
+  if(!connections[i]) {
+    connections[i] = new RTCPeerConnection(configuration);
   }
 
-  // When a remote stream arrives display it in the #remoteVideo element
-  pc.ontrack = event => {
-    const stream = event.streams[0];
-    if (!remoteVideo.srcObject || remoteVideo.srcObject.id !== stream.id) {
-      remoteVideo.srcObject = stream;
-    }
-  };
-
-  navigator.mediaDevices.getUserMedia({
-    audio: true,
-    video: true,
-  }).then(stream => {
-    // Display your local video in #localVideo element
-    localVideo.srcObject = stream;
-    // Add your stream to be sent to the conneting peer
-    stream.getTracks().forEach(track => pc.addTrack(track, stream));
-  }, onError);
+  // If user is offerer let the 'negotiationneeded' event create the offer to ith peer
+  if (isOfferer) {
+    connections[i].onnegotiationneeded = () => {
+      connections[i].createOffer().then(function(description) {
+        connections[i].setLocalDescription(description).then(function() {
+          sendMessage({'sdp': connections[i].localDescription}, i);
+        }).catch(onError);
+    });
+  }
+}
 
   // Listen to signaling data from Scaledrone
   room.on('data', (message, client) => {
@@ -94,27 +142,30 @@ function startWebRTC(isOfferer) {
       return;
     }
 
-    if (message.sdp) {
+    if(message.destId!=currID) {
+      return;
+    }
+
+    let pId = message.peerId;
+
+    if (message.msg.sdp) {
       // This is called after receiving an offer or answer from another peer
-      pc.setRemoteDescription(new RTCSessionDescription(message.sdp), () => {
+      connections[pId].setRemoteDescription(new RTCSessionDescription(message.msg.sdp), () => {
         // When receiving an offer lets answer it
-        if (pc.remoteDescription.type === 'offer') {
-          pc.createAnswer().then(localDescCreated).catch(onError);
+        if (connections[pId].remoteDescription.type === 'offer') {
+          connections[pId].createAnswer().then(function(description) {
+            connections[pId].setLocalDescription(description).then(function() {
+              sendMessage({'sdp': connections[pId].localDescription}, pId);
+            }).catch(onError);
+        });
         }
       }, onError);
-    } else if (message.candidate) {
+    } else if (message.msg.candidate) {
+      console.log("ice added");
       // Add the new ICE candidate to our connections remote description
-      pc.addIceCandidate(
-        new RTCIceCandidate(message.candidate), onSuccess, onError
+      connections[pId].addIceCandidate(
+        new RTCIceCandidate(message.msg.candidate), onSuccess, onError
       );
     }
   });
-}
-
-function localDescCreated(desc) {
-  pc.setLocalDescription(
-    desc,
-    () => sendMessage({'sdp': pc.localDescription}),
-    onError
-  );
 }
