@@ -1,12 +1,9 @@
-// Generate random room name if needed
 if (!location.hash) {
   location.hash = Math.floor(Math.random() * 0xFFFFFF).toString(16);
 }
 const roomHash = location.hash.substring(1);
 
-// TODO: Replace with your own channel ID
 const drone = new ScaleDrone('b6DBzUwhaA5XaPkS');
-// Room name needs to be prefixed with 'observable-'
 const roomName = 'observable-' + roomHash;
 const configuration = {
   iceServers: [{
@@ -15,6 +12,8 @@ const configuration = {
 };
 let room;
 let pc;
+
+let depth = 7;
 
 let connections = []
 
@@ -38,8 +37,6 @@ drone.on('open', error => {
     }
   });
 
-  // We're connected to the room and received an array of 'members'
-  // connected to the room (including us). Signaling server is ready.
   room.on('members', members => {
     currID = members.length-1;
 
@@ -51,15 +48,16 @@ drone.on('open', error => {
       audio: true,
       video: true,
     }).then(stream => {
-      // Display your local video in #localVideo element
+
       localVideo.srcObject = stream;
 
       let videoId = 2;
 
-      for(let i=0; i<6; i++) {
+      for(let i=currID-1; i<=currID+1; i++) {
         if(!connections[i]) {
           console.log("Creating new for "+i);
           connections[i] = new RTCPeerConnection(configuration);
+          // statsInterval = window.setInterval(getConnectionStats, 1000);
         
           connections[i].onicecandidate = event => {
             if (event.candidate) {
@@ -68,8 +66,11 @@ drone.on('open', error => {
             }
           };
 
-          // When a remote stream arrives display it in the #remoteVideo element
-          
+          //presenter's track
+          if(currID==depth) {
+            stream.getTracks().forEach(track => connections[i].addTrack(track, stream));
+          }
+
           connections[i].ontrack = event => {
             console.log("video by:"+i);
             const stream = event.streams[0];
@@ -79,19 +80,37 @@ drone.on('open', error => {
             if (!remoteVideo.srcObject || remoteVideo.srcObject.id !== stream.id) {
               remoteVideo.srcObject = stream;
             }
-          };
-        }
-       // Add your stream to be sent to the conneting peer
-        stream.getTracks().forEach(track => connections[i].addTrack(track, stream));
-      }
-  
-    if(currID===0) {
-      startWebRTC(false, currID);
-    }
 
-    for(let j=0; j<currID; j++) { //calling to all previous peers
-      startWebRTC(true, j);
-    }
+            // passing on the recieved stream ahead
+            if(currID!=depth) {
+              stream.getTracks().forEach(track => connections[currID-1].addTrack(track, stream));
+            }
+
+            console.log(currID);
+            // if(currID===0) {
+            //   startWebRTC(false, currID);
+            // }
+            if(currID>0){
+              console.log(connections[currID-1]);
+              console.log("calling "+(currID-1));
+              startWebRTC(true, currID-1); //calling previous
+            }
+
+          };
+
+        }
+      }
+
+      startWebRTC(false, currID+1);
+      if(currID==depth) {
+        startWebRTC(true, depth-1);
+      }
+    
+
+
+    // for(let j=0; j<currID; j++) { 
+    //   startWebRTC(true, j);
+    // }
     
   });
 });
@@ -102,7 +121,6 @@ drone.on('open', error => {
 
 });
 
-// Send signaling data via Scaledrone
 function sendMessage(message, i) {
   let newMessage = {
     peerId: currID,
@@ -111,6 +129,7 @@ function sendMessage(message, i) {
   }
 
   message = newMessage
+  console.log(message);
 
   drone.publish({
     room: roomName,
@@ -124,7 +143,6 @@ function startWebRTC(isOfferer, i) {
     connections[i] = new RTCPeerConnection(configuration);
   }
 
-  // If user is offerer let the 'negotiationneeded' event create the offer to ith peer
   if (isOfferer) {
     connections[i].onnegotiationneeded = () => {
       connections[i].createOffer().then(function(description) {
@@ -135,9 +153,9 @@ function startWebRTC(isOfferer, i) {
   }
 }
 
-  // Listen to signaling data from Scaledrone
   room.on('data', (message, client) => {
-    // Message was sent by us
+    console.log("recirevdd");
+    console.log(message);
     if (client.id === drone.clientId) {
       return;
     }
@@ -149,9 +167,7 @@ function startWebRTC(isOfferer, i) {
     let pId = message.peerId;
 
     if (message.msg.sdp) {
-      // This is called after receiving an offer or answer from another peer
       connections[pId].setRemoteDescription(new RTCSessionDescription(message.msg.sdp), () => {
-        // When receiving an offer lets answer it
         if (connections[pId].remoteDescription.type === 'offer') {
           connections[pId].createAnswer().then(function(description) {
             connections[pId].setLocalDescription(description).then(function() {
@@ -161,11 +177,40 @@ function startWebRTC(isOfferer, i) {
         }
       }, onError);
     } else if (message.msg.candidate) {
-      console.log("ice added");
-      // Add the new ICE candidate to our connections remote description
       connections[pId].addIceCandidate(
         new RTCIceCandidate(message.msg.candidate), onSuccess, onError
       );
     }
   });
+}
+
+
+function getConnectionStats() {  
+  connections[currID-1].getStats(null).then(stats => {
+    var statsOutput = "back-edge stats ";
+ 
+    stats.forEach(report => {
+      if (report.type === "inbound-rtp" && report.kind === "video") {
+        Object.keys(report).forEach(statName => {
+          statsOutput += `<strong>${statName}:</strong> ${report[statName]}<br>\n`;
+        });
+      }
+    });
+    
+    console.log(statsOutput);
+  });  
+
+  connections[currID+1].getStats(null).then(stats => {
+    var statsOutput = "fwd-edge stats ";
+ 
+    stats.forEach(report => {
+      if (report.type === "inbound-rtp" && report.kind === "video") {
+        Object.keys(report).forEach(statName => {
+          statsOutput += `<strong>${statName}:</strong> ${report[statName]}<br>\n`;
+        });
+      }
+    });
+    
+    console.log(statsOutput);
+  });  
 }
