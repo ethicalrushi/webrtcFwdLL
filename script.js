@@ -13,7 +13,7 @@ const configuration = {
 let room;
 let pc;
 
-let depth = 6;
+let depth = 100;
 
 var presenterInput = prompt("Please enter if presenter");
 
