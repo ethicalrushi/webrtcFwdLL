@@ -13,7 +13,15 @@ const configuration = {
 let room;
 let pc;
 
-let depth = 7;
+let depth = 6;
+
+var presenterInput = prompt("Please enter if presenter");
+
+let isPresenter = false;
+
+if(presenterInput=="y") {
+  isPresenter = true;
+}
 
 let connections = []
 
@@ -39,6 +47,9 @@ drone.on('open', error => {
 
   room.on('members', members => {
     currID = members.length-1;
+    if(isPresenter) {
+      depth = currID;
+    }
 
     if(!connections[currID]) {
       connections[currID] = new RTCPeerConnection(configuration);
