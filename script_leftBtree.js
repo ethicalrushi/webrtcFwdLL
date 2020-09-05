@@ -48,7 +48,7 @@ if (!location.hash) {
   
     room.on('members', members => {
       currID = members.length-1;
-      console.log(currID);
+      console.log("currId", currID);
 
       children = [currID+2, currID+3];
       if(currID%2==0) {
@@ -61,14 +61,14 @@ if (!location.hash) {
       
 
       
-      if(currID%2==0) { //even
+    if(currID%2==0) { //even
         parentNode = currID-3;
     }
     else {
         parentNode = currID-2;
     }
 
-    if(currID==1 || currID==2) {
+    if(currID===1 || currID===2) {
         parentNode = 0;
     }
 
@@ -84,7 +84,10 @@ if (!location.hash) {
   
         localVideo.srcObject = stream;
 
-        let neighbours = children;
+        let neighbours = [];
+        for(let x of children) {
+            neighbours.push(x);
+        }
         if(parentNode>=0) {
             neighbours.push(parentNode);
         }
@@ -124,6 +127,7 @@ if (!location.hash) {
               if(currID!=0 && i<currID) {
                 var newStream = stream.clone();
                 for(let child of children) {
+                    console.log("child adding ", child);
                     stream.getTracks().forEach(track => track.applyConstraints(trackConfiguration).then(() => {
                         connections[child].addTrack(track, stream)
                     }));
