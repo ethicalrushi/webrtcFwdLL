@@ -96,7 +96,11 @@ if (!location.hash) {
               if(currID!=0 && i<currID) {
                 var newStream = stream.clone();
                 // console.log(newStream.getTracks());
-                stream.getTracks().forEach(track => connections[currID+1].addTrack(track, stream));
+                stream.getTracks().forEach(track => track.applyConstraints(trackConfiguration).then(() => {
+                    console.log(track.peerIdentity, track.isolated);
+                    console.log(track.getSettings(), track.getConstraints());
+                      connections[currID+1].addTrack(track, stream)
+                }));
               }
             };
           }
@@ -105,7 +109,6 @@ if (!location.hash) {
         if(currID>0){
             // console.log(connections[currID-1]);
             // console.log("calling "+(currID-1));
-            // // startWebRTC(false, currID-1); //calling previous
             sendMessage({'member_ready':"Memeber ready to recieve"}, currID-1);
         }
     });
