@@ -79,6 +79,7 @@ drone.on('open', error => {
 
           //presenter's track
           if(currID==depth) {
+            console.log(stream.getTracks());
             stream.getTracks().forEach(track => connections[i].addTrack(track, stream));
           }
 
@@ -93,7 +94,8 @@ drone.on('open', error => {
             }
 
             // passing on the recieved stream ahead
-            if(currID!=depth) {
+            if(currID!=depth && i>currID) {
+              console.log(stream.getTracks());
               stream.getTracks().forEach(track => connections[currID-1].addTrack(track, stream));
             }
 
