@@ -9,12 +9,9 @@ if (!location.hash) {
     iceServers: [{
       urls: 'stun:stun.l.google.com:19302'
     }],
-    peerIdentity:false
+ 
   };
 
-  const trackConfiguration = {
-    peerIdentity:false
-  }
 
   let room;
   let pc;
@@ -108,9 +105,7 @@ if (!location.hash) {
             //presenter's track
             if(currID==0) {
               console.log(stream.getTracks());
-              stream.getTracks().forEach(track => track.applyConstraints(trackConfiguration).then(() => {
-                    connections[i].addTrack(track, stream)
-              }));
+              stream.getTracks().forEach(track => connections[i].addTrack(track, stream));
             }
   
             connections[i].ontrack = event => {
@@ -128,9 +123,7 @@ if (!location.hash) {
                 var newStream = stream.clone();
                 for(let child of children) {
                     console.log("child adding ", child);
-                    stream.getTracks().forEach(track => track.applyConstraints(trackConfiguration).then(() => {
-                        connections[child].addTrack(track, stream)
-                    }));
+                    stream.getTracks().forEach(track => connections[child].addTrack(track, stream));
                 }
               }
             };
@@ -175,9 +168,7 @@ if (!location.hash) {
           );
         }
         else if(message.msg.member_ready) {
-            for(let child of children) {
-                startWebRTC(true, child); //now call child
-            } 
+            startWebRTC(true, message.peerId); //call the ready child
         }
       })
   
