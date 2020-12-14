@@ -85,7 +85,7 @@ if (!location.hash) {
             connections[i].ontrack = event => {
               console.log("video by:"+i);
               const stream = event.streams[0];
-              let remoteVideoName = "remoteVideo"+Math.floor(videoId/2);
+              let remoteVideoName = "remoteVideo1";
               videoId++;
               remoteVideo = document.getElementById(remoteVideoName)
               if (!remoteVideo.srcObject || remoteVideo.srcObject.id !== stream.id) {
