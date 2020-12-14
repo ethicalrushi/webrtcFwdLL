@@ -150,6 +150,7 @@ if (!location.hash) {
           return;
         }
 
+        console.log("recieved ", message);
         let pId = message.peerId;
     
         if (message.msg.sdp) {
