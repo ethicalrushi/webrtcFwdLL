@@ -15,13 +15,13 @@ if (!location.hash) {
   
   let depth = 100;
   
-  var presenterInput = prompt("Please enter if presenter");
+  // var presenterInput = prompt("Please enter if presenter");
   
   let isPresenter = false;
   
-  if(presenterInput=="y") {
-    isPresenter = true;
-  }
+  // if(presenterInput=="y") {
+  //   isPresenter = true;
+  // }
   
   let connections = []
   
